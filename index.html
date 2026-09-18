@@ -263,6 +263,7 @@
     localStorage.removeItem(roomCodeKey);
     const url=new URL(location.href);url.searchParams.delete('room');history.replaceState(null,'',url);
     $('#roomScreen').classList.add('hidden');$('#landing').classList.remove('hidden');
+    $('#deleteRoomBtn').disabled=false;
     setError('#lobbyError','');setError('#landingError','');
   }
 
@@ -283,6 +284,7 @@
     $('#startBtn').disabled=state.players.length!==state.maxPlayers;
     const canDelete=isHost() && state.players.length===1;
     $('#deleteRoomBtn').classList.toggle('hidden',!canDelete);
+    $('#deleteRoomBtn').disabled=false;
   }
 
   function renderGame(){
