@@ -94,6 +94,7 @@
       <div class="actions">
         <button id="startBtn" class="btn primary">게임 시작</button>
         <button id="copyCodeBtn" class="btn secondary">방 코드 복사</button>
+        <button id="deleteRoomBtn" class="btn danger hidden">방 삭제하고 처음으로</button>
       </div>
       <div id="lobbyError" class="error hidden"></div>
     </div>
@@ -254,6 +255,17 @@
     subscribeRoom(roomId);render();
   }
 
+  function returnToLanding(){
+    if(roomChannel && sb){ sb.removeChannel(roomChannel); roomChannel=null; }
+    clearTimeout(refreshTimer);
+    state=null; roomId=null; picks=[]; votes=[0,0];
+    localStorage.removeItem(roomIdKey);
+    localStorage.removeItem(roomCodeKey);
+    const url=new URL(location.href);url.searchParams.delete('room');history.replaceState(null,'',url);
+    $('#roomScreen').classList.add('hidden');$('#landing').classList.remove('hidden');
+    setError('#lobbyError','');setError('#landingError','');
+  }
+
   function render(){
     if(!state)return;
     $('#roomCodeTop').textContent=state.code;$('#roomCodeBig').textContent=state.code;
@@ -269,6 +281,8 @@
     $('#playerList').innerHTML=state.players.map(p=>`<div class="player"><div><span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b>${p.userId===state.hostUserId?' · 방장':''}${p.userId===userId?' · 나':''}</div><div class="tiny">참가 완료</div></div>`).join('')+Array.from({length:Math.max(0,state.maxPlayers-state.players.length)},()=>`<div class="player off"><b>빈 자리</b><div class="tiny">플레이어 대기 중</div></div>`).join('');
     $('#startBtn').classList.toggle('hidden',!isHost());
     $('#startBtn').disabled=state.players.length!==state.maxPlayers;
+    const canDelete=isHost() && state.players.length===1;
+    $('#deleteRoomBtn').classList.toggle('hidden',!canDelete);
   }
 
   function renderGame(){
@@ -347,6 +361,20 @@
   $('#createBtn').onclick=async()=>{const name=$('#createName').value.trim()||'플레이어 1';const maxPlayers=Number($('#maxPlayers').value)||2;try{const s=await rpc('create_game_room',{p_name:name,p_max_players:maxPlayers});enterRoom(s,name);}catch(e){setError('#landingError',e.message);}};
   $('#joinBtn').onclick=async()=>{const name=$('#joinName').value.trim()||'플레이어';const code=$('#roomCodeInput').value.trim().toUpperCase();try{const s=await rpc('join_game_room',{p_code:code,p_name:name});enterRoom(s,name);}catch(e){setError('#landingError',e.message);}};
   $('#startBtn').onclick=async()=>{try{state=await rpc('start_game',{p_room_id:roomId});setError('#lobbyError','');render();}catch(e){setError('#lobbyError',e.message);}};
+  $('#deleteRoomBtn').onclick=async()=>{
+    if(!state || !isHost() || state.phase!=='lobby' || state.players.length!==1) return;
+    if(!confirm('아직 아무도 참가하지 않았습니다. 이 방을 삭제하고 처음 화면으로 돌아갈까요?')) return;
+    $('#deleteRoomBtn').disabled=true;
+    try{
+      const {error}=await sb.rpc('delete_empty_room',{p_room_id:roomId});
+      if(error) throw new Error(error.message||'방 삭제에 실패했습니다.');
+      returnToLanding();
+    }catch(e){
+      setError('#lobbyError',e.message);
+      $('#deleteRoomBtn').disabled=false;
+      await refreshState();
+    }
+  };
   $('#submitPlanBtn').onclick=async()=>{setError('#planError','');try{state=await rpc('submit_move',{p_room_id:roomId,p_cells:[...picks],p_votes:[votes[0]||0,votes[1]||0]});if(me()?.submitted){picks=[];votes=[0,0];}render();}catch(e){setError('#planError',e.message);}};
   $('#clearBtn').onclick=()=>{picks=[];votes=[0,0];renderGame();};
   $('#restartBtn').onclick=async()=>{try{state=await rpc('restart_game',{p_room_id:roomId});render();}catch(e){alert(e.message);}};
